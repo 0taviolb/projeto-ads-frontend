@@ -2,6 +2,7 @@ import { Component, effect, input, output } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Categoria, CategoriaInput } from '../../../models/categoria.model';
 import { CategoriaService } from '../../../core/services/categoria.service';
+import { mensagemErroHttp } from '../../../core/utils/http-erro.util';
 
 @Component({
   imports: [ReactiveFormsModule],
@@ -20,15 +21,11 @@ export class CategoriaForm {
       nonNullable:true,
       validators:[
       Validators.required,
-      Validators.minLength(3)
-    ]}),  
-    tipo: new FormControl<'RECEITA' | 'DESPESA'>(
-        'DESPESA',
-      { nonNullable: true }
-      ),
-    ativa: new FormControl(true, {
-      nonNullable: true
-    })
+      Validators.minLength(3),
+      Validators.maxLength(60)
+    ]}),
+    tipo: new FormControl<'RECEITA' | 'DESPESA'>('DESPESA', { nonNullable: true }),
+    ativa: new FormControl(true, { nonNullable: true })
   });
 
   constructor(private categoriaService:CategoriaService){
@@ -37,35 +34,50 @@ export class CategoriaForm {
       this.erro = '';
       this.formulario.reset(categoria ? {
         descricao: categoria.descricao,
-        tipo:categoria.tipo,
+        tipo: categoria.tipo,
         ativa: categoria.ativa
       }:{
         descricao: '',
-        tipo:'DESPESA',
+        tipo: 'DESPESA',
         ativa: true
-      })
-    })
+      });
+    });
   }
+
   salvar():void {
     if (this.formulario.invalid){
       this.formulario.markAllAsTouched();
       return;
     }
+
     const dados: CategoriaInput = this.formulario.getRawValue();
     const categoria = this.categoria();
+
     if (categoria === null){
-      this.categoriaService.cadastrar(dados);
+      this.categoriaService.cadastrar(dados).subscribe({
+        next: ()=>{
+          this.formulario.reset({descricao:'', tipo:'DESPESA', ativa:true});
+          this.salvou.emit();
+        },
+        error: erro => {
+          this.erro = mensagemErroHttp(erro, 'Ocorreu um erro ao gravar.');
+          console.error(erro);
+        }
+      });
     } else {
-      const atualizada = this.categoriaService
-        .atualizar(categoria.id,dados);
-      if (!atualizada){
-        this.erro = 'Categoria não encontrada para atualização.';
-        return;
-      }
+      this.categoriaService.atualizar(categoria.id, dados).subscribe({
+        next: ()=>{
+          this.formulario.reset({descricao:'', tipo:'DESPESA', ativa:true});
+          this.salvou.emit();
+        },
+        error: erro => {
+          this.erro = mensagemErroHttp(erro, 'Não foi possível atualizar a categoria.');
+          console.error(erro);
+        }
+      });
     }
-    this.formulario.reset({descricao:'',tipo:'DESPESA',ativa:true});
-    this.salvou.emit();
   }
+
   cancelar():void {
     this.erro = '';
     this.formulario.reset({descricao:'',tipo:'DESPESA',ativa:true});

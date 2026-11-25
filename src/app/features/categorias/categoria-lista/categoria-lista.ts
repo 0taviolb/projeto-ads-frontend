@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, signal, computed } from '@angular/core';
 import { CategoriaForm } from '../categoria-form/categoria-form';
 import { Categoria, CategoriaInput } from '../../../models/categoria.model';
 import { CategoriaService } from '../../../core/services/categoria.service';
+import { mensagemErroHttp } from '../../../core/utils/http-erro.util';
 
 @Component({
   imports: [CategoriaForm],
@@ -10,10 +11,10 @@ import { CategoriaService } from '../../../core/services/categoria.service';
   templateUrl: './categoria-lista.html',
 })
 export class CategoriaLista implements OnInit {
-  categorias: Categoria[] = [];
+  categorias = signal<Categoria[]>([]);
   erro = "";
   carregado = false;
-
+  filtroTipo = signal<'TODOS' | 'RECEITA' | 'DESPESA'>('TODOS');
   categoriaSelecionada: Categoria | null = null;
 
   constructor(private categoriaService: CategoriaService) {}
@@ -27,13 +28,12 @@ export class CategoriaLista implements OnInit {
     this.erro = "";
     this.categoriaService.listar().subscribe({
       next: dados => {
-        this.categorias = dados;
+        this.categorias.set(dados);
         this.carregado = false;
       },
       error: erro => {
         this.carregado = false;
-        this.erro = "Falha ao carregar categorias";
-        console.log(erro);
+        this.erro = mensagemErroHttp(erro, 'Falha ao carregar categorias');
       }
     })
   }
@@ -62,9 +62,29 @@ export class CategoriaLista implements OnInit {
       .subscribe({
         next: ()=>this.carregarCategorias(),
         error: erro => {
-          this.erro = 'Não foi possível atualizar a situação,';
+          this.erro = mensagemErroHttp(erro, 'Não foi possível atualizar a situação.');
           console.error(erro);
         }
       });
   }
+
+  categoriasFiltradas = computed(() => {
+    const tipo = this.filtroTipo();
+
+    if (tipo === 'TODOS') {
+      return this.categorias();
+    }
+
+    return this.categorias().filter(
+      categoria => categoria.tipo === tipo
+    );
+  });
+  
+  alterarFiltro(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.filtroTipo.set(
+      select.value as 'TODOS' | 'RECEITA' | 'DESPESA'
+    );
+  }
+
 }
